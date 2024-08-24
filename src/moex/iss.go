@@ -14,8 +14,11 @@ type IssData struct {
 }
 
 type IssRow struct {
-	XMLName   xml.Name `xml:"row"`
-	Ticker    string   `xml:"SECID,attr"`
-	Price     float32  `xml:"LAST,attr"`
-	PrevPrice float32  `xml:"PREVPRICE,attr"`
+	XMLName      xml.Name `xml:"row"`
+	Secid        string   `xml:"SECID,attr"`
+	Price        float32  `xml:"LAST,attr"`
+	PrevPrice    float32  `xml:"PREVPRICE,attr"`
+	Volume       string   `xml:"VALTODAY,attr"`
+	LastVlaue    float32  `xml:"LASTVALUE,attr"`
+	CurrentValue float32  `xml:"CURRENTVALUE,attr"`
 }

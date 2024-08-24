@@ -21,4 +21,5 @@ type IssRow struct {
 	Volume       string   `xml:"VALTODAY,attr"`
 	LastVlaue    float32  `xml:"LASTVALUE,attr"`
 	CurrentValue float32  `xml:"CURRENTVALUE,attr"`
+	MarketPrice2 float32  `xml:"MARKETPRICE2,attr"`
 }

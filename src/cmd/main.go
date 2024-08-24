@@ -17,38 +17,27 @@ var shareTickers = []string{"PHOR", "SIBN", "ROSN", "SBER", "PLZL", "BELU"}
 var colorReset = "\033[0m"
 var colorRed = "\033[31m"
 var colorGreen = "\033[32m"
-var rowSeparator = "--------------------------------------------------------------------"
+var rowSeparator = "----------------------------------------------------------------------------------------"
 
 const issSecuritiesUri string = "https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities.xml?iss.meta=off&iss.only=marketdata,securities&marketdata.columns=SECID,LAST,VALTODAY&securities.columns=SECID,PREVPRICE"
 const issIndexUri string = "https://iss.moex.com/iss/engines/stock/markets/index/boards/SNDX/securities.xml?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,LASTVALUE,CURRENTVALUE,VALTODAY"
+const issRtsiUri string = "https://iss.moex.com/iss/engines/stock/markets/index/boards/RTSI/securities.xml?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,LASTVALUE,CURRENTVALUE,VALTODAY"
 
 func main() {
-	printHeader()
 	for i := 0; i < 1000; i++ {
-		resp, err := http.Get(issSecuritiesUri)
-		if err != nil {
-			panic(err)
-		}
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		defer resp.Body.Close()
-
 		var doc moex.IssDocument
-		if err = xml.Unmarshal([]byte(body), &doc); err != nil {
+		if err := loadData(issSecuritiesUri, &doc); err != nil {
 			panic(err)
 		}
-
 		sharesByTicker := make(map[string]*share.Share)
 		for _, ticker := range shareTickers {
 			s := share.New(ticker)
 			sharesByTicker[ticker] = &s
 		}
-		if err = populateSecurities(sharesByTicker, doc.Data[1]); err != nil {
+		if err := populateSecurities(sharesByTicker, doc.Data[1]); err != nil {
 			panic(err)
 		}
-		if err = populateMarketData(sharesByTicker, doc.Data[0]); err != nil {
+		if err := populateMarketData(sharesByTicker, doc.Data[0]); err != nil {
 			panic(err)
 		}
 		shares := make([]*share.Share, 0, len(sharesByTicker))
@@ -57,58 +46,82 @@ func main() {
 		}
 		sort.Sort(share.ByChange(shares))
 
-		resp2, err := http.Get(issIndexUri)
-		if err != nil {
+		if err := loadData(issIndexUri, &doc); err != nil {
 			panic(err)
 		}
-		body2, err := io.ReadAll(resp2.Body)
-		if err != nil {
-			panic(err)
-		}
-		defer resp2.Body.Close()
-		var doc2 moex.IssDocument
-		if err = xml.Unmarshal([]byte(body2), &doc2); err != nil {
-			panic(err)
-		}
-		imoex, err := getIMoexData(doc2)
+		imoex, err := getIndexData(doc.Data[2], "IMOEX")
 		if err != nil {
 			panic(err)
 		}
 
-		print(shares, &imoex)
+		if err := loadData(issRtsiUri, &doc); err != nil {
+			panic(err)
+		}
+		rtsi, err := getIndexData(doc.Data[3], "RTSI")
+		if err != nil {
+			panic(err)
+		}
+
+		printFrame(shares, &imoex, &rtsi)
 		time.Sleep(5 * time.Second)
 	}
 }
 
-func print(shares []*share.Share, imoex *share.Share) {
+func loadData(uri string, doc *moex.IssDocument) error {
+	resp, err := http.Get(uri)
+	if err != nil {
+		return err
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err = xml.Unmarshal([]byte(body), doc); err != nil {
+		return (err)
+	}
+	return nil
+}
+
+func printFrame(shares []*share.Share, imoex *share.Share, rtsi *share.Share) {
+	printHeader()
 	for _, share := range shares {
-		change := share.PriceChange()
-		percent := share.PriceChangePercent()
-		color := colorGreen
-		if change < 0 {
-			color = colorRed
-		}
-
-		fmt.Printf("| %5s %s%10.1f%s %12.1f %s%8.1f %8.1f %s %15s |\n", share.Ticker, color, share.Price, colorReset, share.PrevPrice, color, change, percent, colorReset, share.FormattedVolume())
+		printShare(share)
 	}
-	fmt.Printf("|%66s|\n", " ")
+	printBlank()
 
-	change := imoex.PriceChange()
-	percent := imoex.PriceChangePercent()
-	color := colorGreen
-	if change < 0 {
-		color = colorRed
-	}
-	fmt.Printf("| %5s %s%10.1f%s %12.1f %s%8.1f %8.1f %s %15s |\n", imoex.Ticker, color, imoex.Price, colorReset, imoex.PrevPrice, color, change, percent, colorReset, imoex.FormattedVolume())
-	fmt.Printf("|%66s|\n", " ")
+	printShare(imoex)
+	printShare(rtsi)
+	printBlank()
 
-	fmt.Printf("|  TIME: %57s |\n", time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Println(rowSeparator)
+	printTime()
+	printSeparator()
 }
 
 func printHeader() {
 	fmt.Println(rowSeparator)
-	fmt.Printf("| %5s %10s %12s %8s %8s %16s |\n", "SHARE", "PRICE", "PREV_PRICE", "CHANGE", "%", "VOLUME")
+	fmt.Printf("| %5s %15s %17s %13s %13s %16s |\n", "SHARE", "PRICE,RUB", "PREV_PRICE,RUB", "CHANGE,RUB", "CHANGE,%", "VOLUME,RUB")
+	fmt.Println(rowSeparator)
+}
+
+func printShare(s *share.Share) {
+	var color string
+	color = colorGreen
+	if s.PriceChange() < 0 {
+		color = colorRed
+	}
+	fmt.Printf("| %5s %s%15.1f%s %17.1f %s%13.1f %13.1f %s %15s |\n", s.Ticker, color, s.Price, colorReset, s.PrevPrice, color, s.PriceChange(), s.PriceChangePercent(), colorReset, s.FormattedVolume())
+}
+
+func printTime() {
+	fmt.Printf("|  TIME  %77s |\n", time.Now().Format("2006-01-02 15:04:05"))
+}
+
+func printBlank() {
+	fmt.Printf("|%86s|\n", " ")
+}
+
+func printSeparator() {
 	fmt.Println(rowSeparator)
 }
 
@@ -139,16 +152,16 @@ func populateMarketData(shares map[string]*share.Share, marketdata moex.IssData)
 	return nil
 }
 
-func getIMoexData(marketdata moex.IssDocument) (share.Share, error) {
+func getIndexData(marketdata moex.IssData, ticker string) (share.Share, error) {
 	var s share.Share
-	for _, v := range marketdata.Data[0].Rows {
-		if v.Secid == "IMOEX" {
-			s = share.New("IMOEX")
+	for _, v := range marketdata.Rows {
+		if v.Secid == ticker {
+			s = share.New(ticker)
 			s.Price = v.CurrentValue
 			s.PrevPrice = v.LastVlaue
 			s.Volume = v.Volume
 			return s, nil
 		}
 	}
-	return s, fmt.Errorf("security IMOEX not found")
+	return s, fmt.Errorf("security %s not found", ticker)
 }

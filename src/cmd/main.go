@@ -14,6 +14,7 @@ import (
 
 var shareTickers = []string{"PHOR", "SIBN", "ROSN", "SBER", "PLZL", "BELU"}
 var currencyTickers = []string{"GLDRUB_TOM", "CNYRUB_TOM", "USD000UTSTOM"}
+var futuresTickers = []string{"BRU4", "NGU4", "SVU4", "GLDRUBF"}
 
 var colorReset = "\033[0m"
 var colorRed = "\033[31m"
@@ -24,6 +25,7 @@ const issSecuritiesUri string = "https://iss.moex.com/iss/engines/stock/markets/
 const issIndexUri string = "https://iss.moex.com/iss/engines/stock/markets/index/boards/SNDX/securities.xml?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,LASTVALUE,CURRENTVALUE,VALTODAY&securities=IMOEX,RGBI"
 const issRtsiUri string = "https://iss.moex.com/iss/engines/stock/markets/index/boards/RTSI/securities.xml?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,LASTVALUE,CURRENTVALUE,VALTODAY"
 const issCurrencyUri string = "https://iss.moex.com/iss/engines/currency/markets/selt/securities.xml?iss.meta=off&iss.only=marketdata,securities&securities=CETS:USD000UTSTOM,CETS:GLDRUB_TOM,CETS:CNYRUB_TOM"
+const issFuturesUri string = "https://iss.moex.com/iss/engines/futures/markets/forts/boards/RFUD/securities.xml?iss.meta=off&iss.only=marketdata,securities"
 
 func main() {
 	for i := 0; i < 1000; i++ {
@@ -89,7 +91,28 @@ func main() {
 		}
 		sort.Sort(share.ByChange(currencies))
 
-		printFrame(shares, &imoex, &rgbi, &rtsi, currencies)
+		if err := loadData(issFuturesUri, &doc); err != nil {
+			panic(err)
+		}
+
+		futuresByTicker := make(map[string]*share.Share)
+		for _, ticker := range futuresTickers {
+			s := share.New(ticker)
+			futuresByTicker[ticker] = &s
+		}
+		if err := populateSecurities(futuresByTicker, doc.Data[7]); err != nil {
+			panic(err)
+		}
+		if err := populateMarketData(futuresByTicker, doc.Data[6]); err != nil {
+			panic(err)
+		}
+		futures := make([]*share.Share, 0, len(futuresByTicker))
+		for _, v := range futuresByTicker {
+			futures = append(futures, v)
+		}
+		sort.Sort(share.ByChange(futures))
+
+		printFrame(shares, &imoex, &rgbi, &rtsi, currencies, futures)
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -110,7 +133,7 @@ func loadData(uri string, doc *moex.IssDocument) error {
 	return nil
 }
 
-func printFrame(shares []*share.Share, imoex *share.Share, rgbi *share.Share, rtsi *share.Share, currencies []*share.Share) {
+func printFrame(shares []*share.Share, imoex *share.Share, rgbi *share.Share, rtsi *share.Share, currencies []*share.Share, futures []*share.Share) {
 	printHeader()
 	for _, share := range shares {
 		printShare(share)
@@ -123,6 +146,11 @@ func printFrame(shares []*share.Share, imoex *share.Share, rgbi *share.Share, rt
 	printBlank()
 
 	for _, c := range currencies {
+		printShare(c)
+	}
+	printBlank()
+
+	for _, c := range futures {
 		printShare(c)
 	}
 	printBlank()

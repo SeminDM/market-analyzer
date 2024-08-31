@@ -24,42 +24,54 @@ func NewPrinter(dest *os.File) Printer {
 
 func (p *Printer) PrintFrame(shares []*share.Share, imoex *share.Share, rgbi *share.Share, rtsi *share.Share, currencies []*share.Share, futures []*share.Share) {
 	p.printHeader()
-	for _, share := range shares {
-		p.printShare(share)
-	}
-	p.printBlank()
 
-	p.printShare(imoex)
-	p.printShare(rgbi)
-	p.printShare(rtsi)
-	p.printBlank()
-
-	for _, c := range currencies {
-		p.printShare(c)
+	if len(shares) > 0 {
+		for _, share := range shares {
+			p.printShare(share)
+		}
+		p.printBlank()
 	}
-	p.printBlank()
 
-	for _, c := range futures {
-		p.printShare(c)
+	if imoex != nil || rgbi != nil || rtsi != nil {
+		p.printShare(imoex)
+		p.printShare(rgbi)
+		p.printShare(rtsi)
+		p.printBlank()
 	}
-	p.printBlank()
+
+	if len(currencies) > 0 {
+		for _, c := range currencies {
+			p.printShare(c)
+		}
+		p.printBlank()
+	}
+
+	if len(futures) > 0 {
+		for _, c := range futures {
+			p.printShare(c)
+		}
+		p.printBlank()
+	}
 
 	p.printTime()
 	p.printSeparator()
 }
 
 func (p *Printer) printShare(s *share.Share) {
+	if s == nil {
+		return
+	}
 	var color string
 	color = ColorGreen
 	if s.PriceChange() < 0 {
 		color = ColorRed
 	}
-	p.PrintString(fmt.Sprintf("| %12s %s%15.1f%s %17.1f %s%13.1f %13.1f %s %15s |\n", s.Ticker, color, s.Price, ColorReset, s.PrevPrice, color, s.PriceChange(), s.PriceChangePercent(), ColorReset, s.FormattedVolume()))
+	p.PrintString(fmt.Sprintf("| %12s %15.1f %s%13.1f %13.1f%s %17.1f  %15s |\n", s.Ticker, s.Price, color, s.PriceChange(), s.PriceChangePercent(), ColorReset, s.PrevPrice, s.FormattedVolume()))
 }
 
 func (p *Printer) printHeader() {
 	p.printSeparator()
-	p.PrintString(fmt.Sprintf("| %12s %15s %17s %13s %13s %16s |\n", "SHARE", "PRICE,RUB", "PREV_PRICE,RUB", "CHANGE,RUB", "CHANGE,%", "VOLUME,RUB"))
+	p.PrintString(fmt.Sprintf("| %12s %15s %13s %13s %17s %16s |\n", "SHARE", "PRICE,RUB", "CHANGE,RUB", "CHANGE,%", "PREV_PRICE,RUB", "VOLUME,RUB"))
 	p.printSeparator()
 }
 
